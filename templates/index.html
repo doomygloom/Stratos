@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>S.T.R.A.T.O.S. - Security Threat Reporting and Analysis Terminal Operational System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0a0f1e;
+            color: #e0e0e0;
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background-color: #12192f;
+            border-bottom: 1px solid #1f2b45;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            color: #03a9f4;
+            letter-spacing: 2px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+        }
+
+        .controls input, .controls label {
+            background-color: #1e2a3f;
+            color: #e0e0e0;
+            border: 1px solid #03a9f4;
+            padding: 10px;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .dashboard {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 220px;
+            background-color: #1e2a3f;
+            padding: 15px;
+            border-right: 1px solid #03a9f4;
+        }
+
+        .sidebar h2 {
+            font-size: 18px;
+            color: #03a9f4;
+            margin-bottom: 15px;
+        }
+
+        .sidebar .menu-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #0f172a;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar .menu-item:hover {
+            background-color: #03a9f4;
+            color: #0a0f1e;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            background-color: #12192f;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .card {
+            background-color: #1e2a3f;
+            margin-bottom: 15px;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #03a9f4;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+
+        .card-title {
+            font-size: 16px;
+            color: #03a9f4;
+            margin-bottom: 5px;
+        }
+
+        .links {
+            margin-top: 10px;
+        }
+
+        .links a {
+            display: block;
+            color: #03a9f4;
+            text-decoration: none;
+            margin-bottom: 5px;
+            overflow-wrap: break-word;
+            word-break: break-all;
+            max-width: 100%;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .error {
+            color: #ff6b6b;
+            margin-top: 15px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>S.T.R.A.T.O.S. Command Center</h1>
+        <div class="controls">
+            <input type="text" id="search" placeholder="Search CVE, Vendor, Product...">
+            <label>
+                <input type="checkbox" id="latest-toggle"> Show Latest (20)
+            </label>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="sidebar">
+            <h2>Modules</h2>
+            <div class="menu-item" onclick="navigate('overview')">Overview</div>
+            <div class="menu-item" onclick="navigate('alerts')">Recent Alerts</div>
+            <div class="menu-item" onclick="navigate('map')">Vulnerability Map</div>
+            <div class="menu-item" onclick="navigate('analysis')">Risk Analysis</div>
+        </div>
+
+        <div class="main-content">
+            <div id="cve-container"></div>
+            <div id="error-message" class="error"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let debounceTimer;
+    const DEBOUNCE_DELAY = 300;
+    const latestToggle = document.getElementById('latest-toggle');
+
+    async function fetchCves(query = '', showLatest = false) {
+        const container = document.getElementById('cve-container');
+        const errorMessage = document.getElementById('error-message');
+
+        container.innerHTML = '';
+        errorMessage.textContent = '';
+
+        try {
+            const response = await fetch(`/api/cves?query=${encodeURIComponent(query)}&latest=${showLatest}`);
+            const data = await response.json();
+            
+            if (data.length === 0) {
+                container.innerHTML = `<div class="card">No results found</div>`;
+                return;
+            }
+
+            data.forEach(cve => {
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                const links = (cve.references || '').split('\n').filter(link => link.trim());
+
+                card.innerHTML = `
+                    <div class="card-title">${cve.aliases || cve.id}</div>
+                    <div>${cve.description}</div>
+                    <div><strong>Published:</strong> ${cve.datePublished}</div>
+                    <div><strong>CVSS Score:</strong> ${cve.baseScore}</div>
+                    <div class="links">
+                        <strong>More Info:</strong>
+                        ${links.length ? links.map(link => `<a href="${link.trim()}" target="_blank">${link.trim()}</a>`).join('') : 'No references available'}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        } catch (error) {
+            errorMessage.textContent = `Error fetching CVEs: ${error.message}`;
+        }
+    }
+
+    function handleSearchInput() {
+        const query = document.getElementById('search').value.trim();
+        const showLatest = latestToggle.checked;
+
+        if (debounceTimer) clearTimeout(debounceTimer);
+
+        debounceTimer = setTimeout(() => {
+            if (showLatest) {
+                fetchCves('', true);
+            } else if (query.length > 0) {
+                fetchCves(query);
+            } else {
+                document.getElementById('cve-container').innerHTML = '';
+            }
+        }, DEBOUNCE_DELAY);
+    }
+
+    function handleToggle() {
+        const showLatest = latestToggle.checked;
+        fetchCves('', showLatest);
+    }
+
+    function navigate(section) {
+        alert(`Navigating to ${section} (Functionality to be implemented).`);
+    }
+
+    document.getElementById('search').addEventListener('input', handleSearchInput);
+    latestToggle.addEventListener('change', handleToggle);
+</script>
+
+</body>
+</html>
