@@ -1,6 +1,6 @@
 ### **S.T.R.A.T.O.S. - Security Threat Reporting and Analysis Terminal Operational System**
 
-![image](https://github.com/user-attachments/assets/f0f89ccc-7226-4ae9-9b02-90fa3db85b52)
+![image](https://github.com/user-attachments/assets/95312561-5a5a-409f-88d4-c65f237a7e03)
 
 (a project in progress...)
 
