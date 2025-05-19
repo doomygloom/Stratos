@@ -139,7 +139,7 @@
         <div class="controls">
             <input type="text" id="search" placeholder="Search CVE, Vendor, Product...">
             <label>
-                <input type="checkbox" id="latest-toggle"> Show Latest (20)
+                <input type="checkbox" id="latest-toggle"> Show Most Recent (20)
             </label>
         </div>
     </div>
@@ -147,14 +147,21 @@
     <div class="dashboard">
         <div class="sidebar">
             <h2>Modules</h2>
+            <div class="menu-item" onclick="navigate('main')">Main</div>
             <div class="menu-item" onclick="navigate('overview')">Overview</div>
-            <div class="menu-item" onclick="navigate('alerts')">Recent Alerts</div>
+            <div class="menu-item" onclick="navigate('alerts')">Latest 20 High Risk</div>
             <div class="menu-item" onclick="navigate('map')">Vulnerability Map</div>
             <div class="menu-item" onclick="navigate('analysis')">Risk Analysis</div>
         </div>
 
         <div class="main-content">
             <div id="cve-container"></div>
+            <div id="overview-container" style="display:none;">
+                <div class="card" id="overview-stats"></div>
+            </div>
+            <div id="alerts-container" style="display:none;">
+                <div class="card" id="alerts-list"></div>
+            </div>
             <div id="error-message" class="error"></div>
         </div>
     </div>
@@ -165,6 +172,7 @@
     const DEBOUNCE_DELAY = 300;
     const latestToggle = document.getElementById('latest-toggle');
 
+    
     async function fetchCves(query = '', showLatest = false) {
         const container = document.getElementById('cve-container');
         const errorMessage = document.getElementById('error-message');
@@ -205,6 +213,7 @@
         }
     }
 
+
     function handleSearchInput() {
         const query = document.getElementById('search').value.trim();
         const showLatest = latestToggle.checked;
@@ -212,24 +221,110 @@
         if (debounceTimer) clearTimeout(debounceTimer);
 
         debounceTimer = setTimeout(() => {
-            if (showLatest) {
-                fetchCves('', true);
-            } else if (query.length > 0) {
-                fetchCves(query);
+            if (query.length > 0) {
+                fetchCves(query, showLatest);
             } else {
-                document.getElementById('cve-container').innerHTML = '';
+                if (activeSection === 'main') {
+                    document.getElementById('cve-container').innerHTML = '';
+                }
             }
         }, DEBOUNCE_DELAY);
     }
 
+
+
+
     function handleToggle() {
         const showLatest = latestToggle.checked;
-        fetchCves('', showLatest);
+        const query = document.getElementById('search').value.trim();
+        fetchCves(query, showLatest);
     }
 
+
+    let activeSection = 'overview';  // Default section
+
     function navigate(section) {
-        alert(`Navigating to ${section} (Functionality to be implemented).`);
+        const cveContainer = document.getElementById('cve-container');
+        const overviewContainer = document.getElementById('overview-container');
+        const alertsContainer = document.getElementById('alerts-container');
+
+        // Hide all sections
+        cveContainer.style.display = 'none';
+        overviewContainer.style.display = 'none';
+        alertsContainer.style.display = 'none';
+        
+        if (section === 'main') {
+            // Default main page (no section selected)
+            cveContainer.style.display = 'block';
+            cveContainer.innerHTML = `<div class="card">Welcome to the STRATOS Command Center. Use the search bar to explore CVEs or select a module from the sidebar.</div>`;                                                                                    
+        } 
+        else if (section === 'overview') {
+            overviewContainer.style.display = 'block';
+            fetchOverview();
+        } else if (section === 'alerts') {
+            alertsContainer.style.display = 'block';
+            fetchRecentAlerts();
+        } else {
+            alert(`Navigating to ${section} (Functionality to be implemented).`);
+        }
     }
+
+
+
+
+ 
+    async function fetchOverview() {
+        const overviewStats = document.getElementById('overview-stats');
+        overviewStats.innerHTML = "Loading...";
+
+        try {
+            const response = await fetch('/api/overview');
+            const data = await response.json();
+
+            overviewStats.innerHTML = `
+                <h3>System Overview</h3>
+                <p>Total CVEs: ${data.total_cves}</p>
+                <p>High Risk CVEs: ${data.high_risk_cves}</p>
+                <p>Medium Risk CVEs: ${data.medium_risk_cves}</p>
+                <p>Low Risk CVEs: ${data.low_risk_cves}</p>
+                <p>Last Updated: ${data.last_updated}</p>
+            `;
+        } catch (error) {
+            overviewStats.innerHTML = `Error fetching overview: ${error.message}`;
+        }
+    }
+
+
+    async function fetchRecentAlerts() {
+        const alertsList = document.getElementById('alerts-list');
+        alertsList.innerHTML = "Loading recent alerts...";
+
+        try {
+            const response = await fetch('/api/alerts');
+            const data = await response.json();
+
+            if (data.length === 0) {
+                alertsList.innerHTML = `<div class="card">No recent alerts found</div>`;
+                return;
+            }
+
+            alertsList.innerHTML = `
+                <h3>20 Most Recent CVEs with CVSS Score 7.0 or greater</h3>
+                ${data.map(alert => `
+                    <div class="card">
+                        <div class="card-title">${alert.aliases || alert.id}</div>
+                        <p>${alert.description}</p>
+                        <p><strong>Published:</strong> ${alert.datePublished}</p>
+                        <p><strong>CVSS Score:</strong> ${alert.baseScore}</p>
+                    </div>
+                `).join('')}
+            `;
+        } catch (error) {
+            alertsList.innerHTML = `Error fetching recent alerts: ${error.message}`;
+        }
+    }
+
+
 
     document.getElementById('search').addEventListener('input', handleSearchInput);
     latestToggle.addEventListener('change', handleToggle);
